@@ -1,5 +1,6 @@
 from flask_restful import Resource, reqparse
 from werkzeug.security import safe_str_cmp
+from flask_mail import Mail, Message
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -9,26 +10,96 @@ from flask_jwt_extended import (
     get_raw_jwt
 )
 from models.user import UserModel
+import datetime
 
-_user_parser = reqparse.RequestParser()
-_user_parser.add_argument('username',
+_login_parser = reqparse.RequestParser()
+_login_parser.add_argument('email',
                           type=str,
                           required=True,
                           help="This field cannot be blank."
                           )
-_user_parser.add_argument('password',
+_login_parser.add_argument('password',
                           type=str,
                           required=True,
                           help="This field cannot be blank."
                           )
 
+_register_parser = reqparse.RequestParser()
+_register_parser.add_argument('email',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('password',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('firstName',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('lastName',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('birthday',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('income',
+                          type=float,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('picture',
+                          type=str,
+                          required=False
+                          )
+_register_parser.add_argument('householdType',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('addressBlockHouseNo',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('addressStreetName',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('addressLevel',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('addressUnitNo',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+_register_parser.add_argument('addressBuildingName',
+                          type=str,
+                          required=False
+                          )
+_register_parser.add_argument('addressPostalCode',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
 
 class UserRegister(Resource):
     def post(self):
-        data = _user_parser.parse_args()
+        data = _register_parser.parse_args()
 
-        if UserModel.find_by_username(data['username']):
-            return {"message": "A user with that username already exists"}, 400
+        if UserModel.find_by_email(data['email']):
+            return {"message": "Email already registered"}, 400
 
         user = UserModel(**data)
         user.save_to_db()
@@ -43,16 +114,16 @@ class User(Resource):
     """
     @classmethod
     @jwt_required
-    def get(cls, username: str):
-        user = UserModel.find_by_username(username)
+    def get(cls, email: str):
+        user = UserModel.find_by_email(email)
         if not user:
             return {'message': 'User Not Found'}, 404
         return user.json(), 200
 
     @classmethod
     @jwt_required
-    def delete(cls, username: str):
-        user = UserModel.find_by_username(username)
+    def delete(cls, email: str):
+        user = UserModel.find_by_email(email)
         if not user:
             return {'message': 'User Not Found'}, 404
         user.delete_from_db()
@@ -61,9 +132,9 @@ class User(Resource):
 
 class UserLogin(Resource):
     def post(self):
-        data = _user_parser.parse_args()
+        data = _login_parser.parse_args()
 
-        user = UserModel.find_by_username(data['username'])
+        user = UserModel.find_by_email(data['email'])
 
         # this is what the `authenticate()` function did in security.py
         if user and safe_str_cmp(user.password, data['password']):
@@ -77,13 +148,41 @@ class UserLogin(Resource):
 
         return {"message": "Invalid Credentials!"}, 401
 
-
-class UserLogout(Resource):
-    @jwt_required
+class PinLogin(Resource):
     def post(self):
-        jti = get_raw_jwt()['jti']  # jti is "JWT ID", a unique identifier for a JWT.
-        BLACKLIST.add(jti)
-        return {"message": "Successfully logged out"}, 200
+        _parser = reqparse.RequestParser()
+        _parser.add_argument('email',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+        _parser.add_argument('pin',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+        data = _parser.parse_args()
+        user = UserModel.find_by_email(data['email'])
+        if not user:
+            return {'message': 'User Not Found'}, 404
+        if user.pinExpiry < datetime.datetime.now():
+            return {'message': 'Pin expired'}, 400
+        if data["pin"] != user.pin:
+            return {'message': 'Incorrect pin'}, 400
+        access_token = create_access_token(identity=user.id, fresh=True) 
+        refresh_token = create_refresh_token(user.id)
+        return {
+            'access_token': access_token,
+            'refresh_token': refresh_token
+        }, 200
+        
+
+# class UserLogout(Resource):
+#     @jwt_required
+#     def post(self):
+#         jti = get_raw_jwt()['jti']  # jti is "JWT ID", a unique identifier for a JWT.
+#         BLACKLIST.add(jti)
+#         return {"message": "Successfully logged out"}, 200
 
 
 class TokenRefresh(Resource):
@@ -99,3 +198,6 @@ class TokenRefresh(Resource):
         current_user = get_jwt_identity()
         new_token = create_access_token(identity=current_user, fresh=False)
         return {'access_token': new_token}, 200
+
+
+        

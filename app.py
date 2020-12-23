@@ -1,12 +1,18 @@
 from flask import Flask, jsonify
-from flask_restful import Api
+from flask_restful import Api, Resource, reqparse
 from flask_jwt_extended import JWTManager
+from flask_mail import Mail, Message
+from models.user import UserModel
+from resources.user import UserRegister, User, UserLogin, TokenRefresh, PinLogin#, UserLogout
+import random
+from datetime import datetime, timedelta
 
 from db import db
 
 app = Flask(__name__)
 app.config.from_object("config.Config")
 api = Api(app)
+mail = Mail(app)
 
 @app.before_first_request
 def create_tables():
@@ -59,6 +65,37 @@ def revoked_token_callback():
         "description": "The token has been revoked.",
         'error': 'token_revoked'
     }), 401
+
+class ForgetPassword(Resource):
+    def post(self):
+        _parser = reqparse.RequestParser()
+        _parser.add_argument('email',
+                          type=str,
+                          required=True,
+                          help="This field cannot be blank."
+                          )
+        data = _parser.parse_args()
+        user = UserModel.find_by_email(data['email'])
+        if not user:
+            return {'message': 'User Not Found'}, 404
+        pin = ""
+        for i in range(4):
+            pin += str(random.randrange(9))
+        user.pin = pin
+        user.pinExpiry = datetime.now() + timedelta(hours=2)
+        user.save_to_db()
+        msg = Message('Forget Password', sender = 'fypapp2021@gmail.com', recipients = [data['email']])
+        msg.body = 'Pin: {p}'.format(p=pin)
+        mail.send(msg)
+        return {"message": "Email sent"}, 200
+
+api.add_resource(UserRegister, '/register')
+api.add_resource(User, '/user/<string:email>')
+api.add_resource(UserLogin, '/login')
+api.add_resource(TokenRefresh, '/refresh')
+api.add_resource(ForgetPassword, '/forget/password')
+api.add_resource(PinLogin, '/pin/login')
+# api.add_resource(UserLogout, '/logout')
 
 if __name__ == '__main__':
     db.init_app(app)
