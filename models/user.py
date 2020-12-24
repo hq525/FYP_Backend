@@ -1,4 +1,5 @@
 from db import db
+import datetime
 
 class UserModel(db.Model):
     __tablename__ = 'users'
@@ -76,3 +77,35 @@ class UserModel(db.Model):
     @classmethod
     def find_by_id(cls, _id):
         return cls.query.filter_by(id=_id).first()
+
+class UserAvailabilityModel(db.Model):
+    __tablename__ = 'user_availability'
+    id = db.Column(db.Integer, primary_key=True)
+    userID = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user = db.relationship('UserModel')
+    startDateTime = db.Column(db.DateTime)
+    endDateTime = db.Column(db.DateTime)
+
+    def __init__(self, userID, startDateTime, endDateTime):
+        self.userID = userID
+        self.startDateTime = startDateTime
+        self.endDateTime = endDateTime
+    
+    def json(self):
+        return {
+            'id': self.id,
+            'userID': self.userID,
+            'startDateTime' : self.startDateTime,
+            'endDateTime' : self.endDateTime
+        }
+
+    def save_to_db(self):
+        db.session.add(self)
+        db.session.commit()
+    
+    def delete_from_db(self):
+        db.session.delete(self)
+        db.session.commit()
+
+    def find_in_range(self, startDateTime, endDateTime):
+        return cls.query.filter(cls.startDateTime >= startDateTime).filter(cls.endDateTime <= endDateTime).all()
