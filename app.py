@@ -3,7 +3,7 @@ from flask_restful import Api, Resource, reqparse
 from flask_jwt_extended import JWTManager
 from flask_mail import Mail, Message
 from models.user import UserModel
-from resources.user import UserRegister, User, UserLogin, TokenRefresh, PinLogin#, UserLogout
+from resources.user import UserRegister, User, UserLogin, TokenRefresh, PinLogin, EditUser#, UserLogout
 import random
 from datetime import datetime, timedelta
 
@@ -96,6 +96,7 @@ api.add_resource(TokenRefresh, '/refresh')
 api.add_resource(ForgetPassword, '/forget/password')
 api.add_resource(PinLogin, '/pin/login')
 # api.add_resource(UserLogout, '/logout')
+api.add_resource(EditUser, '/edit/user')
 
 if __name__ == '__main__':
     db.init_app(app)
