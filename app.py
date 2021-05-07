@@ -4,12 +4,21 @@ from flask_jwt_extended import JWTManager
 from flask_mail import Mail, Message
 from models.user import UserModel
 from resources.user import UserRegister, User, UserLogin, TokenRefresh, PinLogin, EditUser#, UserLogout
+from resources.availability import NewAvailability, Availability, GetDates, UserAvailability
+from resources.category import Category, CategoryType, GetCategoryType, GetCategory, GetCategoryInformation
+from resources.tag import Tag
+from resources.item import Item, UserItem
+from resources.request import Request, RequestInformation, UserRequest
+from resources.delivery import MapInformation, Delivery, DeliveryDetails, DeliveryItem, DeliveryRequest
+from resources.rating import Rating
 import random
 from datetime import datetime, timedelta
+from flask_cors import CORS
 
 from db import db
 
 app = Flask(__name__)
+CORS(app)
 app.config.from_object("config.Config")
 api = Api(app)
 mail = Mail(app)
@@ -90,13 +99,48 @@ class ForgetPassword(Resource):
         return {"message": "Email sent"}, 200
 
 api.add_resource(UserRegister, '/register')
-api.add_resource(User, '/user/<string:email>')
+api.add_resource(User, '/user')
 api.add_resource(UserLogin, '/login')
 api.add_resource(TokenRefresh, '/refresh')
 api.add_resource(ForgetPassword, '/forget/password')
 api.add_resource(PinLogin, '/pin/login')
 # api.add_resource(UserLogout, '/logout')
 api.add_resource(EditUser, '/edit/user')
+
+# User Availability
+api.add_resource(NewAvailability, '/availability/new')
+api.add_resource(Availability, '/availability')
+api.add_resource(UserAvailability, '/availability/user')
+api.add_resource(GetDates, '/availability/get')
+
+# Tags
+api.add_resource(Tag, '/tag')
+
+# Categories
+api.add_resource(GetCategory, '/category/get')
+api.add_resource(Category, '/category')
+api.add_resource(GetCategoryType, '/category/type/<string:categoryID>')
+api.add_resource(CategoryType, '/category/type')
+api.add_resource(GetCategoryInformation, '/category/information')
+
+# Items
+api.add_resource(Item, '/item')
+api.add_resource(UserItem, '/item/<string:userID>')
+
+# Requests
+api.add_resource(Request, '/request')
+api.add_resource(UserRequest, '/request/<string:userID>')
+api.add_resource(RequestInformation, '/request/information/<string:requestID>')
+
+# Map Information
+api.add_resource(MapInformation, '/map/information')
+api.add_resource(Delivery, '/delivery')
+api.add_resource(DeliveryItem, '/delivery/item')
+api.add_resource(DeliveryRequest, '/delivery/request')
+api.add_resource(DeliveryDetails, '/delivery/<string:deliveryID>')
+
+# Rating
+api.add_resource(Rating, '/rating')
 
 if __name__ == '__main__':
     db.init_app(app)

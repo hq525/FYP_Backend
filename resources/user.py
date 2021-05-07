@@ -10,89 +10,27 @@ from flask_jwt_extended import (
     get_raw_jwt
 )
 from models.user import UserModel
-import datetime
+from models.credit import CreditModel
+import datetime, http.client, urllib.parse, json
+import math
 
 _login_parser = reqparse.RequestParser()
-_login_parser.add_argument('email',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_login_parser.add_argument('password',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
+_login_parser.add_argument('email',type=str,required=True,help="This field cannot be blank.")
+_login_parser.add_argument('password',type=str,required=True,help="This field cannot be blank.")
 
 _register_parser = reqparse.RequestParser()
-_register_parser.add_argument('email',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('password',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('firstName',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('lastName',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('birthday',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('income',
-                          type=float,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('picture',
-                          type=str,
-                          required=False
-                          )
-_register_parser.add_argument('householdType',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('addressBlockHouseNo',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('addressStreetName',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('addressLevel',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('addressUnitNo',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-_register_parser.add_argument('addressBuildingName',
-                          type=str,
-                          required=False
-                          )
-_register_parser.add_argument('addressPostalCode',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
+_register_parser.add_argument('email',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('password',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('firstName',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('lastName',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('birthday',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('income',type=float,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('picture',type=str,required=False)
+_register_parser.add_argument('householdType',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('addressLine1',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('addressLine2',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('addressPostalCode',type=str,required=True,help="This field cannot be blank.")
+_register_parser.add_argument('householdCount',type=int,required=True,help="This field cannot be blank.")
 
 class UserRegister(Resource):
     def post(self):
@@ -100,12 +38,45 @@ class UserRegister(Resource):
 
         if UserModel.find_by_email(data['email']):
             return {"message": "Email already registered"}, 400
-
-        user = UserModel(**data)
+        
+        # Determine if address given is valid or not
+        conn = http.client.HTTPConnection('api.positionstack.com')
+        address = '{}, {}, Singapore {}'.format(data['addressLine1'], data['addressLine2'], data['addressPostalCode'])
+        params = urllib.parse.urlencode({
+            'access_key': 'bc0e165286c05e84509479ea679117eb',
+            'query': address,
+            'region': 'Singapore',
+            'limit': 1,
+            })
+        conn.request('GET', '/v1/forward?{}'.format(params))
+        res = conn.getresponse()
+        returnData = res.read()
+        response = json.loads(returnData.decode('utf-8'))
+        if len(response['data']) == 0:
+            return {"message": "Invalid Address"}, 400
+        user = UserModel(lat=response['data'][0]['latitude'], lng=response['data'][0]['longitude'], **data)
         user.save_to_db()
-
+        birthday = datetime.datetime.strptime(data['birthday'], '%Y-%m-%d')
+        today = datetime.date.today()
+        age = today.year - birthday.year - ((today.month, today.day) < (birthday.month, birthday.day))
+        credits = calculateSignUpCredits(age, data['income'], data['householdCount'], data['householdType'])
+        credit = CreditModel(userID=user.id, credits=credits)
+        credit.save_to_db()
         return {"message": "User created successfully."}, 201
 
+householdTypes = {
+    'Condominium' : 1000,
+    'HDB' : 2000,
+    'Terrace House' : 500,
+    'Bungalow' : 0,
+    'Semi-Detached' : 250
+}
+
+def calculateSignUpCredits(age, income, householdCount, householdType):
+    credits = age * 100
+    credits += math.exp(income/1000/householdCount)
+    credits += householdTypes[householdType]
+    return credits
 
 class User(Resource):
     """
@@ -114,23 +85,28 @@ class User(Resource):
     """
     @classmethod
     @jwt_required
-    def get(cls, email: str):
-        user = UserModel.find_by_email(email)
+    def get(cls):
+        userID = get_jwt_identity()
+        user = UserModel.find_by_id(userID)
         if not user:
             return {'message': 'User Not Found'}, 404
-        return user.json(), 200
-
-    @classmethod
-    @jwt_required
-    def delete(cls, email: str):
-        user = UserModel.find_by_email(email)
-        if not user:
-            return {'message': 'User Not Found'}, 404
-        user.delete_from_db()
-        return {'message': 'User deleted.'}, 200
+        return {'user': user.json()}, 200
 
 
 class UserLogin(Resource):
+    @jwt_required
+    def get(self):
+        userID = get_jwt_identity()
+        user = UserModel.find_by_id(userID)
+        if user:
+            access_token = create_access_token(identity=user.id, fresh=True) 
+            refresh_token = create_refresh_token(user.id)
+            return {
+                'access_token': access_token,
+                'refresh_token': refresh_token
+            }, 200
+        return {"message": "Invalid Credentials!"}, 401
+    
     def post(self):
         data = _login_parser.parse_args()
 
@@ -151,16 +127,8 @@ class UserLogin(Resource):
 class PinLogin(Resource):
     def post(self):
         _parser = reqparse.RequestParser()
-        _parser.add_argument('email',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
-        _parser.add_argument('pin',
-                          type=str,
-                          required=True,
-                          help="This field cannot be blank."
-                          )
+        _parser.add_argument('email',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('pin',type=str,required=True,help="This field cannot be blank.")
         data = _parser.parse_args()
         user = UserModel.find_by_email(data['email'])
         if not user:
@@ -199,5 +167,65 @@ class TokenRefresh(Resource):
         new_token = create_access_token(identity=current_user, fresh=False)
         return {'access_token': new_token}, 200
 
+class EditUser(Resource):
+    @jwt_required
+    def post(self):
+        _parser = reqparse.RequestParser()
+        _parser.add_argument('email',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('firstName',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('lastName',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('birthday',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('income',type=float,required=True,help="This field cannot be blank.")
+        _parser.add_argument('picture',type=str,required=False)
+        _parser.add_argument('householdType',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('addressLine1',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('addressLine2',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('addressPostalCode',type=str,required=True,help="This field cannot be blank.")
+        data = _parser.parse_args()
+        # Determine if address given is valid or not
+        conn = http.client.HTTPConnection('api.positionstack.com')
+        address = '{}, {}, Singapore {}'.format(data['addressLine1'], data['addressLine2'], data['addressPostalCode'])
+        params = urllib.parse.urlencode({
+            'access_key': 'bc0e165286c05e84509479ea679117eb',
+            'query': address,
+            'region': 'Singapore',
+            'limit': 1,
+            })
+        conn.request('GET', '/v1/forward?{}'.format(params))
+        res = conn.getresponse()
+        returnData = res.read()
+        response = json.loads(returnData.decode('utf-8'))
+        if len(response['data']) == 0:
+            return {"message": "Invalid Address"}, 400
+        userID = get_jwt_identity()
+        user = UserModel.find_by_id(userID)
+        user.email = data['email']
+        user.lat = response['data'][0]['latitude']
+        user.lng = response['data'][0]['longitude']
+        user.firstName = data['firstName']
+        user.lastName = data['lastName']
+        user.birthday = data['birthday']
+        user.income = data['income']
+        if data['picture']:
+            user.picture = data['picture']
+        user.householdType = data['householdType']
+        user.addressLine1 = data['addressLine1']
+        user.addressLine2 = data['addressLine2']
+        user.addressPostalCode = data['addressPostalCode']
+        user.save_to_db()
+        return {"message": "Profile updated"}, 200
+    
+    @jwt_required
+    def put(self):
+        _parser = reqparse.RequestParser()
+        _parser.add_argument('oldPassword',type=str,required=True,help="This field cannot be blank.")
+        _parser.add_argument('newPassword',type=str,required=True,help="This field cannot be blank.")
+        data = _parser.parse_args()
+        userID = get_jwt_identity()
+        user = UserModel.find_by_id(userID)
+        if user and safe_str_cmp(user.password, data['oldPassword']):
+            user.password = data['newPassword']
+            user.save_to_db()
+            return {'message': 'Password Updated'}, 200
 
-        
+        return {"message": "Invalid Credentials!"}, 401
