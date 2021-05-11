@@ -7,8 +7,8 @@ from resources.user import UserRegister, User, UserLogin, TokenRefresh, PinLogin
 from resources.availability import NewAvailability, Availability, GetDates, UserAvailability
 from resources.category import Category, CategoryType, GetCategoryType, GetCategory, GetCategoryInformation
 from resources.tag import Tag
-from resources.item import Item, UserItem
-from resources.request import Request, RequestInformation, UserRequest
+from resources.item import Item, UserItem, Excess
+from resources.request import Request, RequestInformation, UserRequest, Unmet
 from resources.delivery import MapInformation, Delivery, DeliveryDetails, DeliveryItem, DeliveryRequest
 from resources.rating import Rating
 import random
@@ -126,11 +126,13 @@ api.add_resource(GetCategoryInformation, '/category/information')
 # Items
 api.add_resource(Item, '/item')
 api.add_resource(UserItem, '/item/<string:userID>')
+api.add_resource(Excess, '/excess')
 
 # Requests
 api.add_resource(Request, '/request')
 api.add_resource(UserRequest, '/request/<string:userID>')
 api.add_resource(RequestInformation, '/request/information/<string:requestID>')
+api.add_resource(Unmet, '/unmet')
 
 # Map Information
 api.add_resource(MapInformation, '/map/information')

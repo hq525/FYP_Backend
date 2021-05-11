@@ -61,7 +61,7 @@ with app.app_context():
                 recommendation.save_to_db()
             for itemQuantity, i in enumerate(itemQuantities):
                 if itemQuantity > 0:
-                    excess = ExcessModel(items[i].id,itemQuantity)
+                    excess = ExcessModel(items[i].id,itemQuantity, item[i].categoryType.price)
                     excess.save_to_db()
         elif donatedQuantity == requestedQuantity:
             allocations = deliveryOptimizer(itemQuantities, queueItemQuantities, distances)

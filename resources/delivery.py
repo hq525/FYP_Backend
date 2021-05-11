@@ -139,7 +139,7 @@ class DeliveryDetails(Resource):
         categoryType = item.categoryType
         quantityLeft = ItemModel.get_category_type_items_quantity(item.categoryTypeID)
         creditsToSubstract = calculateCreditsSpentOnDelivery(quantityLeft, float(categoryType.price), delivery.quantity)
-        beneficiaryCredit = delivery.request.user.credit
+        beneficiaryCredit = delivery.request.user.credit[0]
         beneficiaryCredit.credits -= creditsToSubstract
         beneficiaryCredit.save_to_db()
         return {'message' : 'Delivery updated successfully'}, 200

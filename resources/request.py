@@ -7,7 +7,7 @@ from flask_jwt_extended import (
     jwt_required,
     get_raw_jwt
 )
-from models.request import RequestModel
+from models.request import RequestModel, UnmetModel
 from models.queue import QueueItemModel
 from datetime import datetime
 
@@ -24,6 +24,25 @@ class UserRequest(Resource):
     def get(cls, userID):
         requests = RequestModel.get_all_user_requests(userID)
         return {'requests' : [request.json() for request in requests]}, 200
+
+class Unmet(Resource):
+    @jwt_required
+    def get(cls):
+        unmetRequests = UnmetModel.find_all()
+        requests = []
+        for r in unmetRequests:
+            request = r.request
+            categoryType = request.categoryType
+            category = categoryType.category
+            requests.append({
+                "dateRequested" : request.dateRequested,
+                "category" : category.name,
+                "categoryType" : categoryType.name,
+                "quantity" : r.quantity,
+                "comments" : request.comments,
+                "id" : r.id
+            })
+        return {"requests" : requests}, 200
 
 class Request(Resource):
     @jwt_required

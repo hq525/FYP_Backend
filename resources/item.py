@@ -8,10 +8,43 @@ from flask_jwt_extended import (
     jwt_required,
     get_raw_jwt
 )
-from models.item import ItemModel, ItemTagModel, TagModel
+from models.item import ItemModel, ItemTagModel, TagModel, ExcessModel
 from models.credit import CreditModel
 from models.category import CategoryTypeModel
 import math
+
+class Excess(Resource):
+    @jwt_required
+    def get(self):
+        excess = ExcessModel.find_all()
+        items = []
+        for i in excess:
+            categoryType = i.item.categoryType
+            items.append({
+                'id' : item.id,
+                'itemID' : item.itemID,
+                'quantity' : item.quantity,
+                'name' : categoryType.name,
+                'price' : categoryType.price
+            })
+        return {"items" : items}, 200
+
+    def post(self):
+        _parser = reqparse.RequestParser()
+        _parser.add_argument('itemID',type=str,required=True,help="This field cannot be blank.")
+        data = _parser.parse_args()
+        excess = ExcessModel.find_by_item(data['itemID'])
+        items = []
+        for i in excess:
+            categoryType = i.item.categoryType
+            items.append({
+                'id' : item.id,
+                'itemID' : item.itemID,
+                'quantity' : item.quantity,
+                'name' : categoryType.name,
+                'price' : categoryType.price
+            })
+        return {"items" : items}, 200
 
 class UserItem(Resource):
     @jwt_required

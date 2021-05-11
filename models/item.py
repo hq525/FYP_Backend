@@ -9,7 +9,7 @@ class ExcessModel(db.Model):
     item = db.relationship('ItemModel', back_populates="excessItems")
     quantity = db.Column(db.Integer)
 
-    def __init__(self, itemID, quantity):
+    def __init__(self, itemID, quantity, price):
         self.itemID = itemID
         self.quantity = quantity
     
@@ -27,6 +27,10 @@ class ExcessModel(db.Model):
     def delete_from_db(self):
         db.session.delete(self)
         db.session.commit()
+
+    @classmethod
+    def find_all(cls):
+        return cls.query.all()
     
     @classmethod
     def find_by_id(cls, _id):
